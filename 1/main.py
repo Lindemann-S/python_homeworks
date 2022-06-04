@@ -1,82 +1,38 @@
+from collections import deque
+
+
 def shape(m):
     assert m, "map must be not empty"
     return len(m), len(m[0])
 
 
-def printer(ch, curr, max_index):
-    if curr == max_index - 1:
-        print(ch)
-    else:
-        print(ch, end='')
-
-
 def print_map(m, pos):
-    height = len(m)
-    length = len(m[0])
+    height, length = shape(m)
     assert pos[0] <= height - 1 and pos[1] <= length - 1, "Indiana Jones left the world"
     for row in range(height):
         for col in range(length):
             if (row, col) == pos:
-                printer('@', col, length)
-            elif m[row][col] is False:
-                printer('#', col, length)
+                ch = "@"
+            elif not m[row][col]:
+                ch = "#"
             else:
-                printer('.', col, length)
-
-
-def neighbours(m, pos):
-    result = []
-    height = len(m)
-    length = len(m[0])
-    assert pos[0] < height and pos[1] < length, "off-map position"
-    if pos[0] < height - 1 and m[pos[0] + 1][pos[1]]:
-        result.append((pos[0] + 1, pos[1]))
-    if pos[0] > 0 and m[pos[0] - 1][pos[1]]:
-        result.append((pos[0] - 1, pos[1]))
-    if pos[1] < length - 1 and m[pos[0]][pos[1] + 1]:
-        result.append((pos[0], pos[1] + 1))
-    if pos[1] > 0 and m[pos[0]][pos[1] - 1]:
-        result.append((pos[0], pos[1] - 1))
-    # print(result)
-    return result
-
-
-def neighbours_without_labeled(m, dm, pos):
-    result = []
-    height = len(m)
-    length = len(m[0])
-    assert pos[0] < height and pos[1] < length, "off-map position"
-    if pos[0] < height - 1 and m[pos[0] + 1][pos[1]] and not dm[pos[0] + 1][pos[1]]:
-        result.append((pos[0] + 1, pos[1]))
-
-    if pos[0] > 0 and m[pos[0] - 1][pos[1]] and not dm[pos[0] - 1][pos[1]]:
-        result.append((pos[0] - 1, pos[1]))
-
-    if pos[1] < length - 1 and m[pos[0]][pos[1] + 1] and not dm[pos[0]][pos[1] + 1]:
-        result.append((pos[0], pos[1] + 1))
-
-    if pos[1] > 0 and m[pos[0]][pos[1] - 1] and not dm[pos[0]][pos[1] - 1]:
-        result.append((pos[0], pos[1] - 1))
-
-    # print(result)
-    return result
+                ch = "."
+            print(ch, end="")
+        print()
 
 
 def find_next_pos(dm, pos):
-    height = len(dm)
-    length = len(dm[0])
-    current = dm[pos[0]][pos[1]]
-    if pos[0] < height - 1 and dm[pos[0] + 1][pos[1]] + 1 == current:
-        return pos[0] + 1, pos[1]
-
-    if pos[0] > 0 and dm[pos[0] - 1][pos[1]] + 1 == current:
-        return pos[0] - 1, pos[1]
-
-    if pos[1] < length - 1 and dm[pos[0]][pos[1] + 1] + 1 == current:
-        return pos[0], pos[1] + 1
-
-    if pos[1] > 0 and dm[pos[0]][pos[1] - 1] + 1 == current:
-        return pos[0], pos[1] - 1
+    height, length = shape(dm)
+    x, y = pos
+    current = dm[x][y]
+    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+    for dx, dy in directions:
+        point = (x + dx, y + dy)
+        inside_map = 0 <= point[0] < height and 0 <= point[1] < length
+        if inside_map:
+            not_none = not dm[point[0]][point[1]] is None
+            if not_none and dm[point[0]][point[1]] + 1 == current:
+                return point
 
 
 def create_route(dm, start, finish):
@@ -89,23 +45,39 @@ def create_route(dm, start, finish):
     return result[::-1]
 
 
+def find_neighbours(m, dm, pos, size):
+    x, y = pos
+    result = []
+    height, length = size
+    directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+    for dx, dy in directions:
+        point = (x + dx, y + dy)
+        inside_map = 0 <= point[0] < height and 0 <= point[1] < length
+        not_wall = m[point[0]][point[1]]
+        is_null = dm[point[0]][point[1]] == 0
+        if inside_map and not_wall and is_null:
+            result.append(point)
+    return result
+
+
 def find_route(m, initial):
-    map_size = shape(m)
-    distance_map = [[0] * map_size[0] for _ in range(map_size[0])]
+    size = shape(m)
+    height, length = size
+    assert 0 <= initial[0] < height and 0 <= initial[1] < length, "off-map position"
+    distance_map = [[0] * length for _ in range(height)]
     label = 1
     distance_map[initial[0]][initial[1]] = label
-    current_neighbours = neighbours_without_labeled(m, distance_map, initial)
-    while len(current_neighbours) != 0:
+    current_neighbours = deque(find_neighbours(m, distance_map, initial, size))
+    while current_neighbours:
+        next_neighbours = deque()
         label += 1
-        next_neighbours = []
-        for neighbour in current_neighbours:
-            distance_map[neighbour[0]][neighbour[1]] = label
-            if neighbour[0] == 0 or neighbour[0] == map_size[0] - 1 or neighbour[1] == 0 \
-                    or neighbour[1] == map_size[1] - 1:
-                route = create_route(distance_map, initial, neighbour)
-                # print(route)
-                return route
-            next_neighbours.extend(neighbours_without_labeled(m, distance_map, neighbour))
+        for x, y in current_neighbours:
+            if distance_map[x][y] == 0:
+                distance_map[x][y] = label
+            if (x == 0 or x == height - 1
+                    or y == 0 or y == length - 1):
+                return create_route(distance_map, initial, (x, y))
+            next_neighbours.extend(find_neighbours(m, distance_map, (x, y), size))
         current_neighbours = next_neighbours
 
 
@@ -123,9 +95,6 @@ def main():
          [False, False, True, False],
          [False, True, True, False],
          [False, True, False, True]]
-    # print_map(m, (2, 1))
-    # neighbours(m, (2, 1))
-    # find_route(m, (1, 1))
     escape(m, (1, 1))
 
 
